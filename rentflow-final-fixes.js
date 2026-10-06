@@ -15,4 +15,14 @@ window.openItem=function(iid=''){
 window.saveItemFix=function(iid){const name=document.getElementById('in').value.trim(),rent=document.getElementById('ir').value,basis=document.getElementById('ib').value,period=document.getElementById('ip').value;if(!name)return alert('Item Name is required.');if(rent===''||Number(rent)<0)return alert('Enter Rent Price.');if(basis===''||Number(basis)<1)return alert('Enter Rate Basis (Qty).');if(!period)return alert('Select Rate Period.');let x=data.items.find(a=>String(a.id)===String(iid));if(!x){x={id:uid(),qty:0};data.items.push(x)}x.name=name;x.code=document.getElementById('ic').value.trim();x.category=document.getElementById('icat').value.trim()||'General';x.unit=document.getElementById('iu').value;x.rent=Number(rent);x.basis=Number(basis);x.period=period;x.notes=document.getElementById('inote').value.trim();save();go('inventory')};
 function setupEnterFlow(root){root?.querySelectorAll('input,select,textarea').forEach((el)=>el.addEventListener('keydown',(e)=>{if(e.key!=='Enter'||e.shiftKey||e.ctrlKey||e.altKey||e.metaKey)return;e.preventDefault();const fields=[...root.querySelectorAll('input:not([disabled]),select:not([disabled]),textarea:not([disabled])')];const i=fields.indexOf(el);if(i>=0&&i<fields.length-1){fields[i+1].focus()}else{document.querySelector('.btn.primary[onclick*="saveItemFix"]')?.focus()}}))}
 pages.inventory=inventoryFix;pages.dashboard=dashboardFix;
+
+// Keep Returns consistent with Issued: open the dedicated full Returns page.
+const originalGo = window.go;
+window.go = function(p) {
+  if (p === 'returns') {
+    window.location.href = 'returns.html';
+    return;
+  }
+  return originalGo(p);
+};
 })();
