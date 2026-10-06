@@ -1,0 +1,50 @@
+name: Fix RentFlow Company Open Flow
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Patch company open flow
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+
+          old = 'onclick="openCompany()">Open Company'
+          new = 'onclick="selectSavedCompany()">Open Company'
+          if old in s:
+              s = s.replace(old, new, 1)
+
+          marker = 'function companyGate(){'
+          helper = "function selectSavedCompany(){current='dashboard';render()}\n"
+          if 'function selectSavedCompany(){' not in s and marker in s:
+              s = s.replace(marker, helper + marker, 1)
+
+          p.write_text(s, encoding='utf-8')
+          PY
+
+          if git diff --quiet -- index.html; then
+            echo 'No company-flow change required.'
+            exit 0
+          fi
+
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m 'fix: open saved company to dashboard'
+          git push
