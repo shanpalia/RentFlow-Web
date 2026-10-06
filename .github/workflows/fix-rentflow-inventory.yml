@@ -1,0 +1,81 @@
+name: Fix RentFlow Inventory
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Apply inventory and layout fixes
+        run: |
+          python3 <<'PY'
+          from pathlib import Path
+          import re
+
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+
+          # Use the complete available browser width for every main page.
+          s = s.replace('max-width:1600px', 'max-width:none;width:100%')
+          s = s.replace('width:min(900px,100%)', 'width:min(1100px,100%)')
+
+          # Add Item: do not show Opening Quantity or Current Quantity separately.
+          # Keep one stock Quantity field, plus Item Price and Rent per Day.
+          item_form = '''function itemForm(id){const old=item(id)||{name:'',code:'',category:'General',qty:0,price:0,rent:15};openModal(`<div class="modalhead"><h2>${id?'Edit':'Add'} Inventory Item</h2><button class="close" data-action="close">×</button></div><div class="form"><div class="field"><label>Item Name *</label><input id="fName" value="${esc(old.name)}"></div><div class="field"><label>Item Code</label><input id="fCode" value="${esc(old.code)}"></div><div class="field"><label>Category</label><input id="fCat" value="${esc(old.category||'General')}"></div><div class="field"><label>Quantity *</label><input id="fQty" type="number" min="0" value="${old.qty??0}"></div><div class="field"><label>Item Price</label><input id="fPrice" type="number" min="0" step="0.01" value="${old.price??0}"></div><div class="field"><label>Rent per Day</label><input id="fRent" type="number" min="0" step="0.01" value="${old.rent??15}"></div><div class="full toolbar"><button class="btn primary" data-action="save-item:${id||''}">Save Item</button><button class="btn ghost" data-action="close">Cancel</button></div></div>`)}```
+          s, n = re.subn(r'function itemForm\(id\)\{.*?\n?\}\nfunction customerForm', item_form + '\nfunction customerForm', s, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit('Could not locate itemForm')
+
+          save_item = '''function saveItem(id){const name=document.getElementById('fName').value.trim();if(!name)return alert('Item name is required.');const old=item(id);const x={id:id||uid(),name,code:document.getElementById('fCode').value.trim(),category:document.getElementById('fCat').value.trim()||'General',qty:Number(document.getElementById('fQty').value||0),price:Number(document.getElementById('fPrice').value||0),rent:Number(document.getElementById('fRent').value||0)};if(old)Object.assign(old,x);else data.items.push(x);closeModal();save();go('inventory')}'''
+          s, n = re.subn(r'function saveItem\(id\)\{.*?\nfunction saveCustomer', save_item + '\nfunction saveCustomer', s, count=1, flags=re.S)
+          if n != 1:
+              raise SystemExit('Could not locate saveItem')
+
+          # Rent is a daily amount: quantity × days × rent/day.
+          s = s.replace('Number(r.querySelector(\'.inv-qty\').value||0)*Number(r.querySelector(\'.inv-days\').value||0)*Number(r.querySelector(\'.inv-rent\').value||0)/100', 'Number(r.querySelector(\'.inv-qty\').value||0)*Number(r.querySelector(\'.inv-days\').value||0)*Number(r.querySelector(\'.inv-rent\').value||0)')
+          s = s.replace('qty*days*rent/100', 'qty*days*rent')
+          s = s.replace('Number(old?.rent||0)*q.qty*Number(old?.days||1)/100', 'Number(old?.rent||0)*q.qty*Number(old?.days||1)')
+          s = s.replace('<th>Rent/100</th>', '<th>Rent/Day</th>')
+          s = s.replace('Rent per 100 Days', 'Rent per Day')
+
+          # Show item price and daily rent in inventory where the old rent/100 wording existed.
+          s = s.replace("Rent ${i.rent??15}/100", "Price ${i.price??0} • Rent/Day ${i.rent??15}")
+          s = s.replace("Rent ${esc(i.rent)} / 100", "Price ${esc(i.price??0)} • Rent/Day ${esc(i.rent??0)}")
+
+          p.write_text(s, encoding='utf-8')
+          print('RentFlow inventory/layout fix applied')
+          PY
+
+      - name: Validate JavaScript structure
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          s=Path('index.html').read_text(encoding='utf-8')
+          required=['function itemForm(id)','function saveItem(id)','Rent per Day','data-action="save-item:','qty*days*rent']
+          missing=[x for x in required if x not in s]
+          if missing:
+              raise SystemExit('Missing expected changes: '+', '.join(missing))
+          if 'Opening Quantity' in s or 'Current Quantity' in s:
+              raise SystemExit('Opening/Current quantity UI still exists')
+          print('Validation passed')
+          PY
+
+      - name: Commit fixes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html .github/workflows/fix-rentflow-inventory.yml
+          if git diff --cached --quiet; then
+            echo "No changes to commit"
+          else
+            git commit -m "fix: inventory quantity and daily rent"
+            git push
+          fi
