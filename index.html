@@ -49,4 +49,5 @@ function openCompany(){
 function newCompany(){data.shop={name:'',owner:'',mobile:'',alternateMobile:'',email:'',address:'',city:'',state:'',pin:'',gstin:'',pan:'',businessType:'',invoicePrefix:'INV',logo:''};save();openCompany()}
 function createCompany(){const name=document.getElementById('gname').value.trim();if(!name)return alert('Company name is required.');const s=data.shop;s.name=name;s.owner=document.getElementById('gowner').value.trim();s.mobile=document.getElementById('gmob').value.trim();s.alternateMobile=document.getElementById('galt').value.trim();s.email=document.getElementById('gmail').value.trim();s.businessType=document.getElementById('gbiz').value.trim();s.address=document.getElementById('gaddr').value.trim();s.city=document.getElementById('gcity').value.trim();s.state=document.getElementById('gstate').value.trim();s.pin=document.getElementById('gpin').value.trim();s.gstin=document.getElementById('ggst').value.trim();s.pan=document.getElementById('gpan').value.trim();s.invoicePrefix=document.getElementById('gprefix').value.trim()||'INV';const f=document.getElementById('glogo').files[0];if(f){const r=new FileReader();r.onload=()=>{s.logo=r.result;save();render()};r.readAsDataURL(f)}else{save();render()}}
 companyGate();
-</script></body></html>
+</script><script src="rentflow-enhancements.js"></script>
+</body></html>
