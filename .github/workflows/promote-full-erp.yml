@@ -1,0 +1,26 @@
+name: Promote complete RentFlow ERP page
+on:
+  push:
+    paths:
+      - index_full.html
+      - .github/workflows/promote-full-erp.yml
+permissions:
+  contents: write
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Promote full page
+        run: |
+          set -euo pipefail
+          cp index_full.html index.html
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          if git diff --cached --quiet; then
+            echo "No index changes"
+            exit 0
+          fi
+          git commit -m "feat: restore complete Emerald ERP style RentFlow UI"
+          git push
