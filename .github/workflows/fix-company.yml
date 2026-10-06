@@ -1,0 +1,62 @@
+name: Fix RentFlow company settings
+
+on:
+  push:
+    paths:
+      - 'index.html'
+      - '.github/workflows/fix-company.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fix:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Patch company settings
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p = Path('index.html')
+          s = p.read_text(encoding='utf-8')
+
+          # Make the shop object safely mergeable and add persistent logo storage.
+          s = s.replace("function blank(){return{shop:{name:'Your Shop',owner:'',mobile:'',address:''},items:[],customers:[],issues:[],returns:[],settings:{currency:'₹'}}}", "function blank(){return{shop:{name:'Your Shop',owner:'',mobile:'',address:'',image:''},items:[],customers:[],issues:[],returns:[],settings:{currency:'₹'}}}")
+          s = s.replace("function read(){try{const x=JSON.parse(localStorage.getItem(KEY));if(x)return Object.assign(blank(),x)}catch(e){}return blank()}", "function read(){try{const x=JSON.parse(localStorage.getItem(KEY));if(x){const b=blank();return {...b,...x,shop:{...b.shop,...(x.shop||{})},settings:{...b.settings,...(x.settings||{})}}}}catch(e){}return blank()}")
+
+          old_shop = "function shop(){return title('Shop / Company')+`<div class=\"card\"><div class=\"form\"><div class=\"field\"><label>Shop / Company Name</label><input id=\"shopName\" value=\"${esc(data.shop.name)}\"></div><div class=\"field\"><label>Owner Name</label><input id=\"shopOwner\" value=\"${esc(data.shop.owner)}\"></div><div class=\"field\"><label>Mobile</label><input id=\"shopMobile\" value=\"${esc(data.shop.mobile)}\"></div><div class=\"field\"><label>Currency</label><input id=\"shopCurrency\" value=\"${esc(data.settings.currency||'₹')}\"></div><div class=\"field full\"><label>Address</label><textarea id=\"shopAddress\">${esc(data.shop.address)}</textarea></div><div class=\"full\"><button class=\"btn primary\" data-action=\"save-shop\">Save Shop Details</button></div></div></div>`}"
+          new_shop = "function shop(){return title('Shop / Company',`<button class=\"btn primary\" data-action=\"save-shop\">Save Company</button>`)+`<div class=\"card\"><div class=\"hero\" style=\"margin-bottom:18px\"><div class=\"logo\" style=\"overflow:hidden\">${data.shop.image?`<img src=\"${data.shop.image}\" style=\"width:100%;height:100%;object-fit:cover\">`:'🏪'}</div><div><h2 style=\"margin:0 0 4px\">Company Profile</h2><div class=\"muted small\">Company details and logo are saved in this browser.</div></div></div><div class=\"form\"><div class=\"field\"><label>Shop / Company Name *</label><input id=\"shopName\" value=\"${esc(data.shop.name)}\"></div><div class=\"field\"><label>Owner Name</label><input id=\"shopOwner\" value=\"${esc(data.shop.owner)}\"></div><div class=\"field\"><label>Mobile</label><input id=\"shopMobile\" value=\"${esc(data.shop.mobile)}\"></div><div class=\"field\"><label>Currency</label><input id=\"shopCurrency\" value=\"${esc(data.settings.currency||'₹')}\"></div><div class=\"field full\"><label>Address</label><textarea id=\"shopAddress\">${esc(data.shop.address)}</textarea></div><div class=\"field full\"><label>Company Logo / Image</label><input id=\"shopImage\" type=\"file\" accept=\"image/png,image/jpeg,image/webp,image/svg+xml\"><div class=\"small muted\" style=\"margin-top:6px\">PNG, JPG, WEBP or SVG. The selected image is stored locally in this browser.</div></div><div class=\"full toolbar\"><button class=\"btn primary\" data-action=\"save-shop\">Save Company Details</button><button class=\"btn secondary\" data-action=\"remove-shop-image\">Remove Image</button></div></div></div>`}"
+          if old_shop not in s:
+              raise SystemExit('shop block not found')
+          s = s.replace(old_shop, new_shop)
+
+          old_act = "if(a==='save-shop'){data.shop={name:document.getElementById('shopName').value.trim(),owner:document.getElementById('shopOwner').value.trim(),mobile:document.getElementById('shopMobile').value.trim(),address:document.getElementById('shopAddress').value.trim()};data.settings.currency=document.getElementById('shopCurrency').value.trim()||'₹';save();return}"
+          new_act = "if(a==='save-shop'){const f=document.getElementById('shopImage')?.files?.[0];const apply=(image)=>{data.shop={...data.shop,name:document.getElementById('shopName').value.trim()||'Your Shop',owner:document.getElementById('shopOwner').value.trim(),mobile:document.getElementById('shopMobile').value.trim(),address:document.getElementById('shopAddress').value.trim(),image:data.shop.image||''};if(image)data.shop.image=image;data.settings.currency=document.getElementById('shopCurrency').value.trim()||'₹';save()};if(f){if(f.size>2*1024*1024)return alert('Company image must be 2 MB or smaller.');const r=new FileReader();r.onload=()=>apply(String(r.result||''));r.readAsDataURL(f)}else apply('');return}if(a==='remove-shop-image'){data.shop.image='';save();return}"
+          if old_act not in s:
+              raise SystemExit('save-shop block not found')
+          s = s.replace(old_act, new_act)
+
+          marker = '<!-- rentflow-company-fix -->'
+          if marker not in s:
+              s = s.replace('</head>', '<style>'+marker+'.company-logo{object-fit:cover}</style></head>')
+          p.write_text(s, encoding='utf-8')
+          PY
+      - name: Verify
+        run: |
+          grep -q "shopImage" index.html
+          grep -q "remove-shop-image" index.html
+          grep -q "rentflow-company-fix" index.html
+          echo "Company settings patch verified"
+      - name: Commit patch
+        run: |
+          if git diff --quiet -- index.html; then
+            echo "No changes needed"
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add index.html
+          git commit -m "fix: save company details and logo"
+          git push
