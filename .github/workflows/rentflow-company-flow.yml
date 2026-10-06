@@ -1,0 +1,47 @@
+name: RentFlow company flow
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/rentflow-company-flow.yml'
+permissions:
+  contents: write
+jobs:
+  patch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Patch RentFlow
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('index.html')
+          s=p.read_text()
+          s=s.replace('<button class="hamb" onclick="toggleSide()">☰</button>','')
+          s=s.replace("function go(p){current=menu.some(x=>x[0]===p)?p:'dashboard';render()}","function go(p){if(p==='issued'){location.href='issued.html';return}current=menu.some(x=>x[0]===p)?p:'dashboard';render()}")
+          s=s.replace("function toggleSide(){document.getElementById('side').classList.toggle('hidden')}","")
+          old="const pages={dashboard:dashboard,inventory:inventory,customers:customers,issued:issued,returns:returns,register:register,reports:reports,shop:shop,settings:settings};render();"
+          new=r'''const pages={dashboard:dashboard,inventory:inventory,customers:customers,issued:issued,returns:returns,register:register,reports:reports,shop:shop,settings:settings};
+          function companyGate(){
+            const saved=data.shop&&data.shop.name;
+            if(saved){
+              document.getElementById('app').innerHTML=`<div style="min-height:calc(100vh - 112px);display:grid;place-items:center"><div class="card" style="width:min(760px,100%);text-align:center;padding:38px"><div style="font-size:52px">🏪</div><h1>Select Company</h1><p style="color:var(--muted)">Choose the company you want to open in RentFlow.</p><div class="card" style="text-align:left;display:flex;align-items:center;gap:16px"><div class="logo">${data.shop.logo?`<img src="${data.shop.logo}">`:'🏪'}</div><div style="flex:1"><h2 style="margin:0">${esc(data.shop.name)}</h2><div>${esc(data.shop.owner||'')}</div><small style="color:var(--muted)">${esc(data.shop.mobile||data.shop.address||'')}</small></div><button class="btn primary" onclick="openCompany()">Open Company</button></div><button class="btn secondary" onclick="newCompany()">＋ Create New Company</button></div></div>`;
+            }else openCompany();
+          }
+          function openCompany(){
+            document.getElementById('app').innerHTML=`<div style="min-height:calc(100vh - 112px);display:grid;place-items:center"><div class="card" style="width:min(900px,100%)"><div class="page-title"><h1>Create Company</h1></div><p style="color:var(--muted)">Create your shop/company first. After saving, RentFlow will open the homepage.</p><div class="form"><div class="field"><label>Shop / Company Name *</label><input id="gname"></div><div class="field"><label>Owner / Contact Person</label><input id="gowner"></div><div class="field"><label>Mobile</label><input id="gmob"></div><div class="field"><label>Alternate Mobile</label><input id="galt"></div><div class="field"><label>Email</label><input id="gmail"></div><div class="field"><label>Business Type</label><input id="gbiz"></div><div class="field full"><label>Address</label><textarea id="gaddr"></textarea></div><div class="field"><label>City</label><input id="gcity"></div><div class="field"><label>State</label><input id="gstate"></div><div class="field"><label>PIN</label><input id="gpin"></div><div class="field"><label>GSTIN</label><input id="ggst"></div><div class="field"><label>PAN</label><input id="gpan"></div><div class="field"><label>Invoice Prefix</label><input id="gprefix" value="INV"></div><div class="field full"><label>Company Logo</label><input id="glogo" type="file" accept="image/png,image/jpeg,image/webp"></div></div><div style="margin-top:20px"><button class="btn primary" onclick="createCompany()">Save Company & Open Homepage</button></div></div></div>`;
+          }
+          function newCompany(){data.shop={name:'',owner:'',mobile:'',alternateMobile:'',email:'',address:'',city:'',state:'',pin:'',gstin:'',pan:'',businessType:'',invoicePrefix:'INV',logo:''};save();openCompany()}
+          function createCompany(){const name=document.getElementById('gname').value.trim();if(!name)return alert('Company name is required.');const s=data.shop;s.name=name;s.owner=document.getElementById('gowner').value.trim();s.mobile=document.getElementById('gmob').value.trim();s.alternateMobile=document.getElementById('galt').value.trim();s.email=document.getElementById('gmail').value.trim();s.businessType=document.getElementById('gbiz').value.trim();s.address=document.getElementById('gaddr').value.trim();s.city=document.getElementById('gcity').value.trim();s.state=document.getElementById('gstate').value.trim();s.pin=document.getElementById('gpin').value.trim();s.gstin=document.getElementById('ggst').value.trim();s.pan=document.getElementById('gpan').value.trim();s.invoicePrefix=document.getElementById('gprefix').value.trim()||'INV';const f=document.getElementById('glogo').files[0];if(f){const r=new FileReader();r.onload=()=>{s.logo=r.result;save();render()};r.readAsDataURL(f)}else{save();render()}}
+          companyGate();'''
+          if old not in s:
+            raise SystemExit('target boot block not found')
+          s=s.replace(old,new)
+          p.write_text(s)
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add index.html
+          git commit -m 'fix: add company-first startup flow' || exit 0
+          git push
